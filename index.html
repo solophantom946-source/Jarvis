@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>J.A.R.V.I.S.</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#010a12">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="JARVIS">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Rajdhani:wght@400;500;600&display=swap">
+<style>
+:root{--bg:#010a12;--bg2:#06233a;--cy:#4fd8ff;--cy2:#1b8fb8;--gold:#ffb347;--dim:rgba(79,216,255,.55);--line:rgba(79,216,255,.28);color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*,*::before,*::after{box-sizing:inherit}
+html,body{height:100%;margin:0}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{background:radial-gradient(ellipse at 50% 42%,var(--bg2) 0%,var(--bg) 68%);color:var(--cy);font-family:"Rajdhani",system-ui,sans-serif;font-size:17px;overflow:hidden}
+.wrap{height:100%;display:flex;flex-direction:column;padding:10px 14px 12px;gap:8px;max-width:980px;margin:0 auto}
+header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:8px}
+h1{font:700 20px/1 "Orbitron",system-ui,sans-serif;letter-spacing:.32em;margin:0;text-shadow:0 0 12px var(--cy)}
+.state{font-weight:600;letter-spacing:.12em;color:var(--gold)}
+.core{flex:1;min-height:0;position:relative}
+canvas{width:100%;height:100%;display:block}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.st{border:1px solid var(--line);border-left:3px solid var(--cy);padding:5px 8px;background:rgba(79,216,255,.05)}
+.st small{display:block;color:var(--dim);font-size:13px;letter-spacing:.08em}
+.st b{font:500 15px "Orbitron",system-ui,sans-serif}
+#log{height:19vh;min-height:90px;overflow-y:auto;border:1px solid var(--line);padding:8px 10px;background:rgba(1,10,18,.6);line-height:1.35}
+#log p{margin:0 0 5px}
+#log .me{color:var(--gold)}
+#log .ai{color:var(--cy)}
+#log a{color:var(--gold);text-decoration:underline}
+form{display:flex;gap:8px}
+input{flex:1;min-width:0;background:rgba(79,216,255,.06);border:1px solid var(--line);color:var(--cy);font:500 17px "Rajdhani",system-ui,sans-serif;padding:10px 12px;outline:none}
+input::placeholder{color:var(--dim)}
+button{background:rgba(79,216,255,.1);border:1px solid var(--cy);color:var(--cy);font:600 16px "Rajdhani",system-ui,sans-serif;letter-spacing:.08em;padding:10px 14px;cursor:pointer}
+button:hover{background:rgba(79,216,255,.25)}
+:is(button,input):focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+button.live{background:var(--gold);color:#201000;border-color:var(--gold)}
+#start{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(1,10,18,.82);z-index:5;text-align:center;padding:20px}
+#start p{margin:0;color:var(--dim);max-width:30ch}
+#start button{font-family:"Orbitron",system-ui,sans-serif;font-size:15px;padding:14px 26px;letter-spacing:.2em;box-shadow:0 0 22px rgba(79,216,255,.4)}
+.hide{display:none!important}
+@media (max-width:520px){.stats{grid-template-columns:repeat(2,1fr)}h1{font-size:16px}}
+</style>
+</head>
+<body>
+<div id="start">
+  <h1>J.A.R.V.I.S.</h1>
+  <p>Tizim tayyor. Ishga tushirish uchun bir marta bosing, janob.</p>
+  <button id="go">FAOLLASHTIRISH</button>
+</div>
+<div class="wrap">
+  <header><h1>J.A.R.V.I.S.</h1><span class="state" id="state">KUTISH</span></header>
+  <div class="core"><canvas id="cv" aria-label="JARVIS yadrosi"></canvas></div>
+  <div class="stats">
+    <div class="st"><small>VAQT</small><b id="clock">--:--:--</b></div>
+    <div class="st"><small>SANA</small><b id="date">--</b></div>
+    <div class="st"><small>ALOQA</small><b id="net">--</b></div>
+    <div class="st"><small>BATAREYA</small><b id="bat">--</b></div>
+  </div>
+  <div id="log" aria-live="polite"></div>
+  <form id="f">
+    <button type="button" id="mic">OVOZ</button>
+    <input id="q" autocomplete="off" placeholder="Buyruq yozing, janob…">
+    <button type="submit">YUBORISH</button>
+  </form>
+</div>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+var cv=$("cv"),ctx=cv.getContext("2d"),speaking=false,listening=false,t0=0;
+var calm=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------- yadro ---------- */
+function size(){var r=cv.getBoundingClientRect(),d=window.devicePixelRatio||1;cv.width=r.width*d;cv.height=r.height*d;ctx.setTransform(d,0,0,d,0,0)}
+addEventListener("resize",size);size();
+function arc(cx,cy,r,a0,a1,w,col,dash){ctx.beginPath();ctx.setLineDash(dash||[]);ctx.lineWidth=w;ctx.strokeStyle=col;ctx.arc(cx,cy,r,a0,a1);ctx.stroke()}
+function draw(ts){
+  var W=cv.clientWidth,H=cv.clientHeight,cx=W/2,cy=H/2,R=Math.min(W,H)*.46,t=calm?0:ts/1000;
+  ctx.clearRect(0,0,W,H);
+  var amp=speaking?.5+.5*Math.sin(t*14):(listening?.5+.5*Math.sin(t*5):.35+.15*Math.sin(t*1.6));
+  var g=ctx.createRadialGradient(cx,cy,0,cx,cy,R*.6);
+  g.addColorStop(0,"rgba(255,255,255,"+(.7+.3*amp)+")");g.addColorStop(.18,"rgba(79,216,255,"+(.55+.35*amp)+")");g.addColorStop(1,"rgba(79,216,255,0)");
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,R*.6,0,7);ctx.fill();
+  ctx.shadowColor="#4fd8ff";ctx.shadowBlur=12;
+  arc(cx,cy,R*.2,0,7,2,"rgba(79,216,255,.95)");
+  for(var i=0;i<10;i++){var a=i*Math.PI/5+t*.4;arc(cx,cy,R*.34,a,a+.42,R*.07,"rgba(79,216,255,.85)")}
+  arc(cx,cy,R*.46,0,7,1,"rgba(79,216,255,.5)");
+  arc(cx,cy,R*.52,t*.8,t*.8+4.2,3,"rgba(79,216,255,.9)");
+  arc(cx,cy,R*.52,t*.8+4.7,t*.8+6,3,"rgba(255,179,71,.9)");
+  arc(cx,cy,R*.64,-t*.6,-t*.6+7,1.5,"rgba(79,216,255,.55)",[3,9]);
+  arc(cx,cy,R*.76,t*.3,t*.3+2.6,2,"rgba(79,216,255,.8)");
+  arc(cx,cy,R*.76,t*.3+3.3,t*.3+5.7,2,"rgba(79,216,255,.8)");
+  for(var k=0;k<72;k++){var b=k*Math.PI/36+t*.1,l=k%6?R*.03:R*.07;
+    ctx.beginPath();ctx.lineWidth=k%6?1:2;ctx.strokeStyle="rgba(79,216,255,.6)";
+    ctx.moveTo(cx+Math.cos(b)*R*.9,cy+Math.sin(b)*R*.9);ctx.lineTo(cx+Math.cos(b)*(R*.9+l),cy+Math.sin(b)*(R*.9+l));ctx.stroke()}
+  arc(cx,cy,R*.9,0,7,1,"rgba(79,216,255,.35)");
+  ctx.shadowBlur=0;
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+/* ---------- log va holat ---------- */
+function setState(s){$("state").textContent=s}
+function log(who,txt){var p=document.createElement("p");p.className=who;p.textContent=(who==="me"?"Siz: ":"Jarvis: ")+txt;$("log").appendChild(p);$("log").scrollTop=1e6}
+
+/* ---------- ovoz chiqarish ---------- */
+function voice(){var v=speechSynthesis.getVoices();
+  return v.find(function(x){return /^uz/i.test(x.lang)})||v.find(function(x){return /^tr/i.test(x.lang)})||null}
+function say(txt){
+  log("ai",txt);
+  if(!("speechSynthesis" in window))return;
+  speechSynthesis.cancel();
+  var u=new SpeechSynthesisUtterance(txt),v=voice();
+  if(v){u.voice=v;u.lang=v.lang}else{u.lang="uz-UZ"}
+  u.rate=.95;u.pitch=.8;
+  u.onstart=function(){speaking=true;setState("GAPIRMOQDA")};
+  u.onend=u.onerror=function(){speaking=false;setState(listening?"TINGLAMOQDA":"KUTISH")};
+  speechSynthesis.speak(u);
+}
+
+/* ---------- buyruqlar ---------- */
+function two(n){return(n<10?"0":"")+n}
+var oylar=["yanvar","fevral","mart","aprel","may","iyun","iyul","avgust","sentyabr","oktyabr","noyabr","dekabr"];
+var kunlar=["yakshanba","dushanba","seshanba","chorshanba","payshanba","juma","shanba"];
+function go(url,name){say(name+" tayyor, janob. Pastdagi havolani bosing.");var p=document.createElement("p"),a=document.createElement("a");p.className="ai";a.href=url;a.target="_blank";a.rel="noopener";a.textContent="› "+name+" — ochish";p.appendChild(a);$("log").appendChild(p);$("log").scrollTop=1e6;try{window.open(url,"_blank","noopener")}catch(e){}}
+function rest(t,w){return t.replace(new RegExp("\\b("+w+")\\b","g"),"").replace(/\s+/g," ").trim()}
+function handle(raw){
+  var t=raw.toLowerCase().replace(/[’ʼʻ`]/g,"'"),n=new Date(),m;
+  log("me",raw);
+  var q,d=t.replace(/[^\d+]/g,"");
+  if(/yordam|nima qila olasan|buyruqlar/.test(t))return say("Ilovalar: Telegram, Instagram, WhatsApp, Spotify. Qidiruv, YouTube, xarita, ob-havo, qoʻngʻiroq, SMS, pochta, joylashuv, bildirishnoma, ulashish va kontaktlar. Hisob-kitob, soat, sana va batareya ham bor, janob.");
+  if(/telegram/.test(t))return go("tg://","Telegram");
+  if(/instagram/.test(t))return go("instagram://app","Instagram");
+  if(/whatsapp|vatsap/.test(t))return go("whatsapp://send","WhatsApp");
+  if(/spotify/.test(t))return go("spotify:","Spotify");
+  if(/youtube|yutub/.test(t)){q=rest(t,"youtube|yutub|qidir|och|dan|da|ni");return go(q?"https://www.youtube.com/results?search_query="+encodeURIComponent(q):"https://www.youtube.com","YouTube")}
+  if(/xarita|manzil/.test(t)){q=rest(t,"xaritada|xarita|manzil|ochib|och|qidir|ni|ga");return go("https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(q||"mening joylashuvim"),"Xarita")}
+  if(/qo'ng'iroq|qongiroq|telefon qil/.test(t))return d?go("tel:"+d,"Qoʻngʻiroq"):say("Raqamni ayting, janob.");
+  if(/sms|xabar yoz/.test(t))return d?go("sms:"+d,"SMS"):say("Raqamni ayting, janob.");
+  if(/pochta|email|mail/.test(t))return go("mailto:","Pochta");
+  if(/ob-havo|havo/.test(t))return go("https://www.google.com/search?q="+encodeURIComponent("ob-havo "+rest(t,"ob-havo|havo|qanday|bugun|qidir|och")),"Ob-havo");
+  if(/qidir|google|internet/.test(t)){q=rest(t,"google|qidir|internet|da|ni|dan");return q?go("https://www.google.com/search?q="+encodeURIComponent(q),"Qidiruv"):say("Nimani qidiray, janob?")}
+  if(/joylashuv|qayerdaman|lokatsiya/.test(t)){
+    if(!navigator.geolocation)return say("Bu brauzerda joylashuv mavjud emas, janob.");
+    return navigator.geolocation.getCurrentPosition(function(p){say("Joylashuvingiz: "+p.coords.latitude.toFixed(4)+", "+p.coords.longitude.toFixed(4)+", janob.")},function(){say("Joylashuvga ruxsat berilmadi, janob.")},{timeout:10000});
+  }
+  if(/bildirishnoma/.test(t)){
+    if(!("Notification" in window))return say("Bu brauzer bildirishnomani qoʻllamaydi, janob.");
+    return Notification.requestPermission().then(function(r){if(r==="granted"){try{new Notification("J.A.R.V.I.S.",{body:"Bildirishnomalar yoqildi, janob."})}catch(e){}}say(r==="granted"?"Bildirishnomalar yoqildi, janob.":"Ruxsat berilmadi, janob.")});
+  }
+  if(/ulashish|ulash|share/.test(t)){
+    if(!navigator.share)return say("Bu qurilmada ulashish menyusi yoʻq, janob.");
+    return navigator.share({title:"J.A.R.V.I.S.",url:location.href}).catch(function(){});
+  }
+  if(/kontakt/.test(t)){
+    if(!(navigator.contacts&&navigator.contacts.select))return say("Kontaktlarga ruxsat faqat Android Chrome’da mavjud, janob.");
+    return navigator.contacts.select(["name","tel"]).then(function(c){if(c[0])say(((c[0].name&&c[0].name[0])||"Kontakt")+": "+((c[0].tel&&c[0].tel[0])||"raqam yoʻq")+", janob.")}).catch(function(){say("Kontaktlarga ruxsat berilmadi, janob.")});
+  }
+  if(/soat|vaqt/.test(t))return say("Hozir soat "+two(n.getHours())+":"+two(n.getMinutes())+", janob.");
+  if(/sana|bugun|kun qaysi/.test(t))return say("Bugun "+n.getDate()+"-"+oylar[n.getMonth()]+", "+n.getFullYear()+"-yil, "+kunlar[n.getDay()]+", janob.");
+  if(/batareya|zaryad/.test(t))return say("Batareya holati: "+$("bat").textContent+", janob.");
+  if(/salom|assalom|hayrli|xayrli/.test(t))return say("Va alaykum assalom, janob. Sizni koʻrganimdan xursandman.");
+  if(/kimsan|isming|tanishtir/.test(t))return say("Men Jarvis, sizning shaxsiy raqamli yordamchingizman, janob. Hozircha brauzer ichida ishlayman.");
+  if(/rahmat|tashakkur/.test(t))return say("Marhamat, janob. Xizmatingizdaman.");
+  m=t.replace(/hisobla|necha|qancha|teng|\?|=/g,"").replace(/ko'paytirish|ko'paytir|marta/g,"*").replace(/bo'lish|bo'l/g,"/").replace(/qo'sh|plyus/g,"+").replace(/ayir|minus/g,"-").replace(/,/g,".").trim();
+  if(/\d/.test(m)&&/^[0-9+\-*\/().\s]+$/.test(m)){
+    try{var r=Function('"use strict";return ('+m+')')();if(isFinite(r))return say("Natija: "+Math.round(r*1e9)/1e9+", janob.")}catch(e){}
+  }
+  if(/musiqa|chiroq/.test(t))return say("Bu funksiya hali ulanmagan, janob. Uy qurilmalari bilan ulanishni keyingi bosqichda qoʻshamiz.");
+  say("Buyruq tushunilmadi, janob. Soat, sana, hisob-kitob yoki batareya holatini soʻrab koʻring.");
+}
+
+/* ---------- ovozli kirish ---------- */
+var SR=window.SpeechRecognition||window.webkitSpeechRecognition,rec=null;
+function mic(){
+  if(!SR)return say("Bu brauzer ovozni tinglashni qoʻllamaydi, janob. Buyruqni yozib yuboring.");
+  if(listening&&rec){rec.stop();return}
+  rec=new SR();rec.lang="uz-UZ";rec.interimResults=false;rec.maxAlternatives=1;
+  rec.onstart=function(){listening=true;$("mic").classList.add("live");setState("TINGLAMOQDA")};
+  rec.onend=function(){listening=false;$("mic").classList.remove("live");setState(speaking?"GAPIRMOQDA":"KUTISH")};
+  rec.onerror=function(e){say(e.error==="not-allowed"?"Mikrofonga ruxsat berilmagan, janob.":"Ovoz aniqlanmadi, janob.")};
+  rec.onresult=function(e){handle(e.results[0][0].transcript)};
+  try{rec.start()}catch(e){}
+}
+$("mic").onclick=mic;
+$("f").onsubmit=function(e){e.preventDefault();var v=$("q").value.trim();if(v){$("q").value="";handle(v)}};
+
+/* ---------- panel ma'lumotlari ---------- */
+function tick(){var n=new Date();$("clock").textContent=two(n.getHours())+":"+two(n.getMinutes())+":"+two(n.getSeconds());
+  $("date").textContent=n.getDate()+" "+oylar[n.getMonth()].slice(0,3);
+  $("net").textContent=navigator.onLine?"ULANGAN":"UZILGAN"}
+tick();setInterval(tick,1000);
+$("bat").textContent="NOMAʼLUM";
+if(navigator.getBattery){navigator.getBattery().then(function(b){
+  function up(){$("bat").textContent=Math.round(b.level*100)+"%"+(b.charging?" ⚡":"")}
+  up();b.onlevelchange=b.onchargingchange=up}).catch(function(){})}
+
+/* ---------- ishga tushirish ---------- */
+function greet(){
+  var h=new Date().getHours(),g=h<5?"Xayrli tun":h<12?"Xayrli tong":h<18?"Xayrli kun":"Xayrli kech";
+  say(g+", janob. Tizimlar faollashtirildi. Jarvis xizmatingizga tayyor.");
+}
+$("go").onclick=function(){$("start").classList.add("hide");
+  if("speechSynthesis" in window&&!speechSynthesis.getVoices().length){speechSynthesis.onvoiceschanged=function(){speechSynthesis.onvoiceschanged=null};setTimeout(greet,350)}else greet()};
+})();
+</script>
+<script>if("serviceWorker" in navigator){addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})})}</script>
+</body>
+</html>
